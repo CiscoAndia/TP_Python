@@ -2,6 +2,8 @@
 
 import helpers
 import manager
+import db
+import grafico
 
 def loop():
 
@@ -52,11 +54,41 @@ def loop2():
         helpers.clear() # LIMPIA LA TERMINAL
 
         if option == '1':
-            manager.resumen_db()
+            db.mostrar_resumen_db()
             
         elif option == '2':
-            pass
-           
+
+            while True:
+
+                helpers.clear() # LIMPIA LA TERMINAL
+
+                print("===============================================")
+                print("          SELECCIONE TIPO DE GRÁFICO           ")
+                print("===============================================")
+                print("[1] Evolución Lineal de Precios                ")
+                print("[2] Gráfico de Velas (Precio Apertura y Cierre)")
+                print("[3] Volver                                     ")
+                print("===============================================")
+
+                option = input("> ")
+            
+                helpers.clear() # LIMPIA LA TERMINAL
+            
+                if option == '1':
+                    grafico.graficar_ticker_1()
+
+                elif option == '2':
+                    grafico.graficar_ticker_2()
+
+                elif option == '3': 
+                    print("Volviendo al menú anterior...\n")
+                    break 
+
+                else:
+                    print("Opción incorrecta")
+
+                input("\nPresiona ENTER para continuar...")
+
         elif option == '3':
             print("Volviendo al menú anterior...\n")
             break 

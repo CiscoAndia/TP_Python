@@ -1,9 +1,9 @@
 """ Archivo principal del programa"""
 
 import menu
-import DB
+import db
 
-DB.crear_db()
+db.crear_db()
 
 def main():
     menu.loop()

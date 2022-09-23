@@ -1,77 +1,156 @@
-""" Funciones del programa """
+""" Función para ingreso de datos y envío de información a las tablas """
 
-import helpers
-import requests
-import json
 import sqlite3
-import re
+from datetime import date, timedelta
+import db
+import api
 
 def ticker():
 
-    ticker = input(">>> Ingrese ticker a pedir:\n")
+    ticker = api.validar_ticker()
 
-    while True:
+    fecha_inicio, fecha_fin = api.validar_fechas(ticker)
 
-        fecha_inicio = input(">>> Ingrese fecha de inicio (formato YYYY-MM-DD):\n")
+    if not db.is_ticker_in_db(ticker):
 
-        if re.match("[0-9]{4}-[0-9]{2}-[0-9]{2}", fecha_inicio) and len(fecha_inicio) == 10:
-            break
-        print("Formato de fecha incorrecto")
+        print(">>> Pidiendo datos...")
 
-    while True:
+        datos = api.request_api(ticker,fecha_inicio,fecha_fin)
 
-        fecha_fin = input(">>> Ingrese fecha de fin (formato YYYY-MM-DD):\n")
+        db.tabla_tickers_db(datos)
 
-        if re.match("[0-9]{4}-[0-9]{2}-[0-9]{2}", fecha_fin) and len(fecha_fin) == 10:
-            break
-        print("Formato de fecha incorrecto")
+        db.tabla_resumen_db((ticker, fecha_inicio, fecha_fin))
 
-    print("Pidiendo datos...")
+        print(">>> Datos guardados correctamente")
 
-    res = requests.get(f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{fecha_inicio}/{fecha_fin}?adjusted=true&sort=asc&limit=120&apiKey=_i0PIv435ie2k6p6Oc6rT162DokO4cO6")
+    else: 
+
+        fecha_inicio_consulta =date.fromisoformat(fecha_inicio)
+        fecha_fin_consulta =date.fromisoformat(fecha_fin)
+
+        conexion = sqlite3.connect("tickers.db")
+        cursor = conexion.cursor()
+
+        cursor.execute("SELECT fecha_inicio, fecha_fin FROM resumen WHERE ticker= ?", (ticker,))
+
+        data = cursor.fetchall()
+
+        fecha_inicio_db = date.fromisoformat(data[0][0])
+        fecha_fin_db = date.fromisoformat(data[0][1])
+
+        conexion.close()
+
+        print(">>> Pidiendo datos...")
+
+        if fecha_inicio_db <= fecha_inicio_consulta <= fecha_fin_db and fecha_fin_consulta > fecha_fin_db:
+
+            fecha_inicio_request = str(fecha_fin_db + timedelta(days=1))
+            fecha_fin_request = str(fecha_fin_consulta)
+
+            fecha_nueva_inicio_db = str(fecha_inicio_db)
+            fecha_nueva_fin_db = fecha_fin_request
+
+            datos = api.request_api(ticker,fecha_inicio_request,fecha_fin_request)
+
+            db.tabla_tickers_db(datos)
+
+            db.actualizar_resumen_db((fecha_nueva_inicio_db,fecha_nueva_fin_db,ticker))
+
+            print(">>> Datos guardados correctamente")
+
+        elif fecha_inicio_consulta < fecha_inicio_db and fecha_inicio_db <= fecha_fin_consulta <= fecha_fin_db:
+
+            fecha_inicio_request = str(fecha_inicio_consulta)
+            fecha_fin_request = str(fecha_inicio_db - timedelta(days=1))
+
+            fecha_nueva_inicio_db = fecha_inicio_request
+            fecha_nueva_fin_db = str(fecha_fin_db)
+
+            datos = api.request_api(ticker,fecha_inicio_request,fecha_fin_request)
+
+            db.tabla_tickers_db(datos)
+
+            db.actualizar_resumen_db((fecha_nueva_inicio_db,fecha_nueva_fin_db,ticker))
+
+            print(">>> Datos guardados correctamente")
+
+        elif fecha_inicio_consulta > fecha_fin_db:
+
+            fecha_inicio_request = str(fecha_fin_db + timedelta(days=1))
+            fecha_fin_request = str(fecha_fin_consulta)
+
+            fecha_nueva_inicio_db = str(fecha_inicio_db)
+            fecha_nueva_fin_db = fecha_fin_request
+
+            datos = api.request_api(ticker,fecha_inicio_request,fecha_fin_request)
+
+            db.tabla_tickers_db(datos)
+
+            db.actualizar_resumen_db((fecha_nueva_inicio_db,fecha_nueva_fin_db,ticker))
+
+            print(">>> Datos guardados correctamente")
+
+        elif fecha_fin_consulta < fecha_inicio_db:
+
+            fecha_inicio_request = str(fecha_inicio_consulta)
+            fecha_fin_request = str(fecha_inicio_db - timedelta(days=1))
+
+            fecha_nueva_inicio_db = fecha_inicio_request
+            fecha_nueva_fin_db = str(fecha_fin_db)
+
+            datos = api.request_api(ticker,fecha_inicio_request,fecha_fin_request)
+
+            db.tabla_tickers_db(datos)
+
+            db.actualizar_resumen_db((fecha_nueva_inicio_db,fecha_nueva_fin_db,ticker))
+
+            print(">>> Datos guardados correctamente")
+
+        elif fecha_inicio_consulta < fecha_inicio_db and fecha_fin_consulta > fecha_fin_db:
+
+            fecha_inicio_request_1 = str(fecha_inicio_consulta)
+            fecha_fin_request_1 = str(fecha_inicio_db - timedelta(days=1))
+
+            fecha_inicio_request_2 = str(fecha_fin_db + timedelta(days=1))
+            fecha_fin_request_2 = str(fecha_fin_consulta)
+
+            fecha_nueva_inicio_db = fecha_inicio_request_1
+            fecha_nueva_fin_db = fecha_fin_request_2
+
+            datos = api.request_api(ticker,fecha_inicio_request_1,fecha_fin_request_1)
+
+            db.tabla_tickers_db(datos)
+
+            datos = api.request_api(ticker,fecha_inicio_request_2,fecha_fin_request_2)
+
+            db.tabla_tickers_db(datos)
+
+            db.actualizar_resumen_db((fecha_nueva_inicio_db,fecha_nueva_fin_db,ticker))
+
+            print(">>> Datos guardados correctamente")
+
+        elif fecha_inicio_consulta >= fecha_inicio_db and fecha_fin_consulta <= fecha_fin_db:
+
+            print("Datos guardados correctamente")
+
+
+       
+
     
-    data = res.json()
-    print(data)
-    precio_apertura = data["results"][0]["o"]
-    precio_cierre = data["results"][-1]["c"]
 
-    precio_mas_alto = data["results"][0]["o"]
-    precio_mas_bajo = data["results"][-1]["c"]
 
-    for valores in data["results"]:
-        if valores["h"] >= precio_mas_alto:
-            precio_mas_alto = valores["h"]
-        if valores["l"] <= precio_mas_bajo:
-            precio_mas_bajo = valores["l"]
+
+
     
-    datos_a_cargar = (ticker,fecha_inicio,fecha_fin,precio_apertura,precio_cierre,precio_mas_alto,precio_mas_bajo)
 
-    guardar_datos_db(datos_a_cargar)
 
-def guardar_datos_db(valores):
 
-    conexion = sqlite3.connect("tickers.db")
-    cursor = conexion.cursor()
 
-    cursor.execute("INSERT INTO tickers VALUES (?,?,?,?,?,?,?)", valores)
 
-    conexion.commit()
-    conexion.close()
 
-    print("Datos guardados correctamente")
 
-def resumen_db():
 
-    conexion = sqlite3.connect("tickers.db")
-    cursor = conexion.cursor()
+    
+    
+    
 
-    cursor.execute("SELECT * FROM tickers")
-
-    tickers = cursor.fetchall()
-
-    print("Los tickers guardados en la base de datos son:")
-
-    for ticker in tickers:
-        print(f"{ticker[0]:4} - {ticker[1]} <-> {ticker[2]}")
-
-    conexion.close()
